@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -14,17 +15,16 @@ namespace Mstsc.Server
 {
     public class Startup
     {
-        List<ConnectionContext> clients = new List<ConnectionContext>();
+        ConcurrentBag<ConnectionContext> clients = new ConcurrentBag<ConnectionContext>();
 
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-           
             var factory = services.BuildServiceProvider().GetService<IConnectionListenerFactory>();
             Task.Run(async () =>
             {
-                var listener = await factory.BindAsync(new IPEndPoint(IPAddress.Any, 38890));
+                var listener = await factory.BindAsync(new IPEndPoint(IPAddress.Any, 3390));
                 while (true)
                 {
                     ConnectionContext client = await listener.AcceptAsync();
@@ -61,10 +61,12 @@ namespace Mstsc.Server
                 {
                     //发送给其他客户端
                     var others = clients.Where(e => e != client);
-                    foreach (var other in others)
+                    Console.WriteLine($"其他客户端：  {others.Count()}");
+
+                    others.AsParallel().ForAll(async (other) =>
                     {
                         await other.Transport.Output.WriteAsync(memory);
-                    }
+                    });
 
                     client.Transport.Input.AdvanceTo(readResult.Buffer.GetPosition(memory.Length));
                 }

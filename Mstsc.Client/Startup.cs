@@ -57,7 +57,7 @@ namespace Mstsc.Client
         public async Task HandlerClientAsync(ConnectionContext client)
         {
             SocketConnect target = new SocketConnect();
-            await target.ConnectAsync("zwovo.xyz", 33890);
+            await target.ConnectAsync("zwovo.xyz", 3390);
 
             new Task(async () =>
             {

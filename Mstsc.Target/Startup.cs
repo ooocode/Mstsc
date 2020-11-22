@@ -30,7 +30,7 @@ namespace Mstsc.Target
             {
                 //连接本地3389
                 await local3389.ConnectAsync("127.0.0.1", 3389);
-                await center.ConnectAsync("zwovo.xyz", 33890);
+                await center.ConnectAsync("zwovo.xyz", 3390);
 
 
                 new Task(async () =>
