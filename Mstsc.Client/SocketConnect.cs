@@ -24,18 +24,10 @@ namespace ServerWebApplication
 
         public async Task ConnectAsync(string host, int port)
         {
-            try
+            await socket.ConnectAsync(host, port);
+            if (socket.Connected)
             {
-                await socket.ConnectAsync(host, port);
-                if (socket.Connected)
-                {
-                    new Task(async () => await this.RecvAsync()).Start();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                socket.Close();
+                this.RecvAsync();
             }
         }
 
@@ -53,22 +45,14 @@ namespace ServerWebApplication
             var memeory = Pipe.Writer.GetMemory(8096);
             while (socket.Connected)
             {
-                try
+                var lenth = await socket.ReceiveAsync(memeory, SocketFlags.None);
+                if (lenth == 0)
                 {
-                    var lenth = await socket.ReceiveAsync(memeory, SocketFlags.None);
-                    if (lenth == 0)
-                    {
-                        break;
-                    }
-
-                    //写入管道
-                    await Pipe.Writer.WriteAsync(memeory.Slice(0, lenth));
-                }
-                catch(Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
                     break;
                 }
+
+                //写入管道
+                await Pipe.Writer.WriteAsync(memeory.Slice(0, lenth));
             }
             socket.Close();
             await Pipe.Writer.CompleteAsync();

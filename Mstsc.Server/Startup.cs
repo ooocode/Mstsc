@@ -21,29 +21,31 @@ namespace Mstsc.Server
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            var factory = services.BuildServiceProvider().GetService<IConnectionListenerFactory>();
-            Task.Run(async () =>
-            {
-                var listener = await factory.BindAsync(new IPEndPoint(IPAddress.Any, 3390));
-                while (true)
-                {
-                    ConnectionContext client = await listener.AcceptAsync();
-                    clients.Add(client);
+            services.AddSignalR();
+            //var factory = services.BuildServiceProvider().GetService<IConnectionListenerFactory>();
+            //Task.Run(async () =>
+            //{
+            //    var listener = await factory.BindAsync(new IPEndPoint(IPAddress.Any, 3390));
+            //    while (true)
+            //    {
+            //        ConnectionContext client = await listener.AcceptAsync();
+            //        clients.Add(client);
+            //        Console.WriteLine(client.RemoteEndPoint);
 
-                    new Task(async () =>
-                    {
-                        try
-                        {
-                            await HandlerClientAsync(client);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine(ex.Message);
-                        }
+            //        new Task(async () =>
+            //        {
+            //            try
+            //            {
+            //                await HandlerClientAsync(client);
+            //            }
+            //            catch (Exception ex)
+            //            {
+            //                Console.WriteLine(ex.Message);
+            //            }
 
-                    }).Start();
-                }
-            });
+            //        }).Start();
+            //    }
+            //});
         }
 
         public async Task HandlerClientAsync(ConnectionContext client)
@@ -60,7 +62,7 @@ namespace Mstsc.Server
                 if (readResult.Buffer.TryGet(ref position, out var memory))
                 {
                     //发送给其他客户端
-                    var others = clients.Where(e => e != client);
+                    var others = clients.Where(e => (e != client));
                     Console.WriteLine($"其他客户端：  {others.Count()}");
 
                     others.AsParallel().ForAll(async (other) =>
@@ -92,6 +94,8 @@ namespace Mstsc.Server
 
             app.UseEndpoints(endpoints =>
             {
+                endpoints.MapHub<ChatHub>("/chathub");
+
                 endpoints.MapGet("/", async context =>
                 {
                     await context.Response.WriteAsync("Hello World!");

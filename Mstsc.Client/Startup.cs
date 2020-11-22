@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ServerWebApplication;
@@ -16,14 +17,13 @@ namespace Mstsc.Client
 {
     public class Startup
     {
-        SocketConnect local3389 = new SocketConnect();
+
 
 
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-
             var factory = services.BuildServiceProvider().GetService<IConnectionListenerFactory>();
             Task.Run(async () =>
             {
@@ -33,85 +33,65 @@ namespace Mstsc.Client
                     ConnectionContext client = await listener.AcceptAsync();
                     new Task(async () =>
                     {
-                        try
-                        {
-                            await HandlerClientAsync(client);
-                        }
-                        catch(Exception ex)
-                        {
-                            Console.WriteLine(ex.Message);
-                        }
-                        
+                        await HandlerClientAsync(client);
                     }).Start();
                 }
             });
-
-            //new Task(async () =>
-            //{
-            //    //连接本地3389
-            //    await local3389.ConnectAsync("127.0.0.1", 3389);
-            //}).Start();
         }
 
 
         public async Task HandlerClientAsync(ConnectionContext client)
         {
-            SocketConnect target = new SocketConnect();
-            await target.ConnectAsync("zwovo.xyz", 3390);
+            HubConnection connection = new HubConnectionBuilder()
+            .WithUrl(new Uri("http://zwovo.xyz:5000/chathub"))
+            .Build();
 
-            new Task(async () =>
+
+            connection.On<byte[]>("recv", async (msg) =>
             {
-                await HandlerTargetAsync(target, client);
-            }).Start();
+                await client.Transport.Output.WriteAsync(msg);
+            });
 
-            while (true)
+            await connection.StartAsync();
+
+            try
             {
-                var readResult = await client.Transport.Input.ReadAsync();
-                if (readResult.Buffer.IsEmpty)
-                {
-                    break;
-                }
+                //注册
+                await connection.InvokeAsync("Regist", "1");
 
-                SequencePosition position = readResult.Buffer.Start;
-                if (readResult.Buffer.TryGet(ref position, out var memory))
+                while (true)
                 {
-                    await target.SendAsync(memory);
-                    client.Transport.Input.AdvanceTo(readResult.Buffer.GetPosition(memory.Length));
-                }
+                    //接受
+                    var readResult = await client.Transport.Input.ReadAsync();
+                    if (readResult.Buffer.IsEmpty)
+                    {
+                        break;
+                    }
 
-                if (readResult.IsCompleted || readResult.IsCanceled)
-                {
-                    break;
+                    SequencePosition position = readResult.Buffer.Start;
+                    if (readResult.Buffer.TryGet(ref position, out ReadOnlyMemory<byte> memory))
+                    {
+                        //发送到中心
+                        await connection.InvokeAsync("SendMessage", "2", memory.ToArray());
+
+                        client.Transport.Input.AdvanceTo(readResult.Buffer.GetPosition(memory.Length));
+                    }
+
+                    if (readResult.IsCompleted || readResult.IsCanceled)
+                    {
+                        break;
+                    }
                 }
             }
-
-            await client.Transport.Input.CompleteAsync();
-        }
-
-        public async Task HandlerTargetAsync(SocketConnect target, ConnectionContext client)
-        {
-            while (true)
+            catch(Exception ex)
             {
-                var readResult = await target.PipeReader.ReadAsync();
-                if (readResult.Buffer.IsEmpty)
-                {
-                    break;
-                }
-
-                SequencePosition position = readResult.Buffer.Start;
-                if (readResult.Buffer.TryGet(ref position, out var memory))
-                {
-                    //发往客户端
-                    await client.Transport.Output.WriteAsync(memory);
-                    target.PipeReader.AdvanceTo(readResult.Buffer.GetPosition(memory.Length));
-                }
-
-                if (readResult.IsCanceled || readResult.IsCompleted)
-                {
-                    break;
-                }
+                Console.WriteLine(ex.Message);
             }
-            await target.PipeReader.CompleteAsync();
+            finally
+            {
+                await connection.StopAsync();
+                await client.Transport.Input.CompleteAsync();
+            }
         }
 
 

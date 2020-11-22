@@ -18,8 +18,13 @@ namespace Mstsc.Server
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
+                    webBuilder.UseKestrel(opt =>
+                    {
+                        opt.ListenAnyIP(5000);
+                    });
                     webBuilder.UseStartup<Startup>();
                 });
     }
